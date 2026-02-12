@@ -67,52 +67,66 @@ const sessionStates = new Map<string, {
   measurementsText?: string;
 }>();
 
+// Максимальная длина входной строки для защиты от ReDoS
+const MAX_INPUT_LENGTH = 500;
+
 // Парсинг команды
 function parseCommand(text: string): { action: string; params: string[] } | null {
+  // Защита от слишком длинных строк
+  if (text.length > MAX_INPUT_LENGTH) {
+    return { action: 'help', params: [] };
+  }
+  
   const normalizedText = text.toLowerCase().trim();
   
   // Запомни нового клиента [имя]
-  const newClientMatch = normalizedText.match(/запомни\s+(?:нового\s+)?клиента\s+(.+)/i);
+  const newClientMatch = normalizedText.match(/запомни\s+(?:нового\s+)?клиента\s+([^]{1,100})$/i);
   if (newClientMatch) {
     return { action: 'add_client', params: [newClientMatch[1].trim()] };
   }
   
-  // Создай для [клиент] изделие [название]
-  const newProductMatch = normalizedText.match(/создай\s+для\s+(.+?)\s+изделие\s+(.+)/i);
-  if (newProductMatch) {
-    return { action: 'add_product', params: [newProductMatch[1].trim(), newProductMatch[2].trim()] };
+  // Создай для [клиент] изделие [название] - безопасный парсинг
+  if (normalizedText.startsWith('создай для ') && normalizedText.includes(' изделие ')) {
+    const parts = normalizedText.split(/\s+изделие\s+/);
+    if (parts.length === 2) {
+      const clientPart = parts[0].replace(/^создай\s+для\s+/, '').trim();
+      const productPart = parts[1].trim();
+      if (clientPart && productPart) {
+        return { action: 'add_product', params: [clientPart, productPart] };
+      }
+    }
   }
   
   // Запоминай замеры для [изделие]
-  const startMeasurementMatch = normalizedText.match(/запоминай\s+замеры\s+для\s+(.+)/i);
+  const startMeasurementMatch = normalizedText.match(/запоминай\s+замеры\s+для\s+([^]{1,100})$/i);
   if (startMeasurementMatch) {
     return { action: 'start_measurement', params: [startMeasurementMatch[1].trim()] };
   }
   
   // Конец записи
-  if (normalizedText.includes('конец записи') || normalizedText === 'конец записи') {
+  if (normalizedText.includes('конец записи')) {
     return { action: 'end_measurement', params: [] };
   }
   
   // Перечисли клиентов
-  if (normalizedText.match(/перечисли\s+клиентов/i) || normalizedText.match(/список\s+клиентов/i)) {
+  if (/^перечисли\s+клиентов$/i.test(normalizedText) || /^список\s+клиентов$/i.test(normalizedText)) {
     return { action: 'list_clients', params: [] };
   }
   
   // Перечисли изделия для [клиент]
-  const listProductsMatch = normalizedText.match(/перечисли\s+изделия\s+(?:для\s+)?(.+)/i);
+  const listProductsMatch = normalizedText.match(/^перечисли\s+изделия\s+(?:для\s+)?([^]{1,100})$/i);
   if (listProductsMatch) {
     return { action: 'list_products', params: [listProductsMatch[1].trim()] };
   }
   
   // Перечисли замеры для [изделие]
-  const listMeasurementsMatch = normalizedText.match(/перечисли\s+замеры\s+(?:для\s+)?(.+)/i);
+  const listMeasurementsMatch = normalizedText.match(/^перечисли\s+замеры\s+(?:для\s+)?([^]{1,100})$/i);
   if (listMeasurementsMatch) {
     return { action: 'list_measurements', params: [listMeasurementsMatch[1].trim()] };
   }
   
   // Помощь
-  if (normalizedText.match(/помощь|что ты умеешь|команды/i)) {
+  if (/помощь|что ты умеешь|команды/i.test(normalizedText)) {
     return { action: 'help', params: [] };
   }
   
@@ -216,7 +230,8 @@ async function handleEndMeasurement(sessionId: string): Promise<string> {
   const measurements: Record<string, string> = {};
   
   for (const line of lines) {
-    const match = line.match(/(.+?)\s+(\d+(?:[.,]\d+)?)/);
+    // Безопасное регулярное выражение с ограничением длины параметра
+    const match = line.match(/^([^\d]{1,50})\s+(\d+(?:[.,]\d+)?)$/);
     if (match) {
       measurements[match[1].trim().toLowerCase()] = match[2].replace(',', '.');
     }
