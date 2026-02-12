@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  tailor-notebook:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tailor-notebook
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/db/custom.db
+    volumes:
+      # Persist SQLite database
+      - tailor-db:/app/db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/alice"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - tailor-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  tailor-db:
+    driver: local
+
+networks:
+  tailor-network:
+    driver: bridge
