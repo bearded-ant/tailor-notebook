@@ -40,9 +40,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Install curl for health check
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# Create non-root user for security (using groupadd/useradd for Debian slim)
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 --gid nodejs nextjs
 
 # Copy built application
 COPY --from=builder /app/public ./public
