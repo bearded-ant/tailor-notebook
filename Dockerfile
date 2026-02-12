@@ -1,5 +1,5 @@
 # Stage 1: Dependencies
-FROM oven/bun:1 AS deps
+FROM oven/bun:1-alpine AS deps
 WORKDIR /app
 
 # Copy package files
@@ -13,7 +13,7 @@ RUN bun install --frozen-lockfile
 RUN bunx prisma generate
 
 # Stage 2: Builder
-FROM oven/bun:1 AS builder
+FROM oven/bun:1-alpine AS builder
 WORKDIR /app
 
 # Copy dependencies from deps stage
@@ -31,21 +31,18 @@ ENV NODE_ENV=production
 RUN bun run build
 
 # Stage 3: Runner
-FROM oven/bun:1-slim AS runner
+FROM oven/bun:1-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install curl for health check and upgrade packages to fix vulnerabilities
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/*
+# Install curl for health check
+RUN apk add --no-cache curl
 
-# Create non-root user for security (using groupadd/useradd for Debian slim)
-RUN groupadd --system --gid 1001 nodejs && \
-    useradd --system --uid 1001 --gid nodejs nextjs
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 --ingroup nodejs nextjs
 
 # Copy built application
 COPY --from=builder /app/public ./public
